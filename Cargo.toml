@@ -1,8 +1,19 @@
 [package]
-name = "LOB"
+name = "lob"
 version = "0.1.0"
 edition = "2021"
 
+
+[lib]
+path = "./src/lib.rs"
+
+[[bin]]
+name="server"
+path= "src/bin/server.rs"
+
+[[bin]]
+name="client"
+path= "src/bin/client.rs"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -15,3 +26,11 @@ tokio-tungstenite = { version = "^0.14.0", features = ["native-tls"]}
 flate2 = "1.0"
 futures = { version = "0.3" }
 itertools = "0.10.5"
+tonic = "0.8.3"
+prost = "0.11.5"
+tokio-stream = "0.1.11"
+futures-core = "0.3.25"
+futures-util = "0.3.25"
+
+[build-dependencies]
+tonic-build = "0.8.4"

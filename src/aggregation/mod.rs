@@ -3,9 +3,7 @@ pub mod quote_merge;
 
 #[cfg(test)]
 mod tests {
-    use crate::aggregated_order_book::quote_merge::{
-        IterativeMergeQuotes, MergeQuotes, VecSortMergeQuotes,
-    };
+    use crate::aggregation::quote_merge::{IterativeMergeQuotes, MergeQuotes, VecSortMergeQuotes};
     use crate::common::model::ExchangeQuote;
     use std::cmp::Ordering;
 

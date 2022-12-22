@@ -1,5 +1,4 @@
-use crate::common::model::ExchangeQuote;
-use crate::OrderBookUpdate;
+use crate::common::model::{ExchangeQuote, OrderBookUpdate};
 use futures::{SinkExt, StreamExt};
 use serde::Deserialize;
 use serde_json::json;

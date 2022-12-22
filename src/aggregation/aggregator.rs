@@ -1,6 +1,7 @@
-use crate::aggregated_order_book::quote_merge::MergeQuotes;
+use crate::aggregation::quote_merge::MergeQuotes;
+use crate::common::model::OrderBookUpdate;
 use crate::common::model::{AggregatedBookQuote, ExchangeQuote};
-use crate::OrderBookUpdate;
+use crate::orderbook::{Level, Summary};
 use std::collections::HashMap;
 
 pub struct OrderBookAggregator<T: MergeQuotes> {
@@ -44,10 +45,7 @@ impl<T: MergeQuotes> OrderBookAggregator<T> {
         }
     }
 
-    pub fn process(
-        &mut self,
-        order_book_update: OrderBookUpdate,
-    ) -> Option<(Vec<AggregatedBookQuote>, Vec<AggregatedBookQuote>)> {
+    pub fn process(&mut self, order_book_update: OrderBookUpdate) -> Option<Summary> {
         let exchange_id = match order_book_update.exchange_id {
             Some(val) => val,
             None => {
@@ -78,9 +76,46 @@ impl<T: MergeQuotes> OrderBookAggregator<T> {
         };
 
         if top_changed {
-            return Some((self.old_bid_book_top.clone(), self.old_ask_book_top.clone()));
+            return self.get_summary();
         };
 
         None
+    }
+
+    fn get_summary(&self) -> Option<Summary> {
+        if self.old_bid_book_top.is_empty() || self.old_ask_book_top.is_empty() {
+            return None;
+        }
+
+        let mut bids = Vec::with_capacity(self.top_book_depth);
+        let mut asks = Vec::with_capacity(self.top_book_depth);
+
+        for bid in &self.old_bid_book_top {
+            bids.push(Level {
+                exchange: self
+                    .exchanges_id_mapping
+                    .get(&bid.exchange)
+                    .unwrap()
+                    .clone(),
+                price: bid.price,
+                amount: bid.qty,
+            })
+        }
+
+        for ask in &self.old_ask_book_top {
+            asks.push(Level {
+                exchange: self
+                    .exchanges_id_mapping
+                    .get(&ask.exchange)
+                    .unwrap()
+                    .clone(),
+                price: ask.price,
+                amount: ask.qty,
+            })
+        }
+
+        let spread = self.old_ask_book_top[0].price - self.old_bid_book_top[0].price;
+
+        Some(Summary { spread, bids, asks })
     }
 }
