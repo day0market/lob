@@ -1,5 +1,5 @@
-mod aggregator;
-mod quote_merge;
+pub mod aggregator;
+pub mod quote_merge;
 
 #[cfg(test)]
 mod tests {

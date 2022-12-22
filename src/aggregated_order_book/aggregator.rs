@@ -1,56 +1,86 @@
 use crate::aggregated_order_book::quote_merge::MergeQuotes;
 use crate::common::model::{AggregatedBookQuote, ExchangeQuote};
+use crate::OrderBookUpdate;
+use std::collections::HashMap;
 
-pub struct ExchangesQuotesAggregator<T: MergeQuotes> {
-    exchanges_quotes: Vec<Vec<ExchangeQuote>>,
-    old_aggregated_book_top: Vec<AggregatedBookQuote>,
-    total_exchanges: usize,
+pub struct OrderBookAggregator<T: MergeQuotes> {
+    exchanges_bids: Vec<Vec<ExchangeQuote>>,
+    exchanges_asks: Vec<Vec<ExchangeQuote>>,
+    old_bid_book_top: Vec<AggregatedBookQuote>,
+    old_ask_book_top: Vec<AggregatedBookQuote>,
+
+    exchanges_number: usize,
     top_book_depth: usize,
     book_merger: T,
-    reverse_ordering: bool,
+    exchanges_id_mapping: HashMap<usize, String>,
 }
 
-impl<T: MergeQuotes> ExchangesQuotesAggregator<T> {
+impl<T: MergeQuotes> OrderBookAggregator<T> {
     pub fn new(
-        total_exchanges: usize,
-        top_book_depth: usize,
-        reverse_ordering: bool,
         book_merger: T,
+        exchanges_number: usize,
+        top_book_depth: usize,
+        exchanges_id_mapping: HashMap<usize, String>,
     ) -> Self {
-        let mut exchanges_quotes = Vec::with_capacity(total_exchanges);
-        for _ in 0..total_exchanges {
-            exchanges_quotes.push(Vec::with_capacity(top_book_depth))
+        let mut exchanges_bids = Vec::with_capacity(exchanges_number);
+        let mut exchanges_asks = Vec::with_capacity(exchanges_number);
+        for _ in 0..exchanges_number {
+            exchanges_bids.push(Vec::with_capacity(top_book_depth));
+            exchanges_asks.push(Vec::with_capacity(top_book_depth));
         }
 
-        let old_aggregated_book_top = Vec::with_capacity(top_book_depth.into());
+        let old_bid_book_top = Vec::with_capacity(top_book_depth.into());
+        let old_ask_book_top = Vec::with_capacity(top_book_depth.into());
+
         Self {
-            exchanges_quotes,
-            old_aggregated_book_top,
-            total_exchanges,
+            exchanges_bids,
+            exchanges_asks,
+            old_bid_book_top,
+            old_ask_book_top,
+            exchanges_number,
             top_book_depth,
             book_merger,
-            reverse_ordering,
+            exchanges_id_mapping,
         }
     }
 
     pub fn process(
         &mut self,
-        exchange_quotes: Vec<ExchangeQuote>,
-        exchange_id: usize,
-    ) -> Option<Vec<AggregatedBookQuote>> {
-        self.exchanges_quotes[exchange_id] = exchange_quotes;
-
-        let new_top = self.book_merger.merge_quotes(
-            &self.exchanges_quotes,
-            &self.old_aggregated_book_top,
-            self.reverse_ordering,
-        );
-        match new_top {
-            Some(val) => {
-                self.old_aggregated_book_top = val.clone();
-                Some(val)
+        order_book_update: OrderBookUpdate,
+    ) -> Option<(Vec<AggregatedBookQuote>, Vec<AggregatedBookQuote>)> {
+        let exchange_id = match order_book_update.exchange_id {
+            Some(val) => val,
+            None => {
+                println!("exchange_id is empty. skip update");
+                return None;
             }
-            None => None,
+        };
+
+        let mut top_changed = false;
+
+        self.exchanges_asks[exchange_id] = order_book_update.ask_changes; // TODO alex cut
+        self.exchanges_bids[exchange_id] = order_book_update.bid_changes; // TODO alex cut
+
+        if let Some(val) =
+            self.book_merger
+                .merge_quotes(&self.exchanges_bids, &self.old_bid_book_top, true)
+        {
+            top_changed = true;
+            self.old_bid_book_top = val;
         }
+
+        if let Some(val) =
+            self.book_merger
+                .merge_quotes(&self.exchanges_asks, &self.old_ask_book_top, false)
+        {
+            top_changed = true;
+            self.old_ask_book_top = val;
+        };
+
+        if top_changed {
+            return Some((self.old_bid_book_top.clone(), self.old_ask_book_top.clone()));
+        };
+
+        None
     }
 }
