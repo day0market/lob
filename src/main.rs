@@ -1,9 +1,10 @@
 mod connectors;
-mod aggregators;
+mod aggregated_order_book;
+mod common;
 
 use std::io::Write;
 use tokio::sync::mpsc::{Receiver,channel};
-use connectors::OrderBookUpdate;
+use common::model::OrderBookUpdate;
 use serde_json;
 use tokio::fs::File;
 use tokio::io::AsyncWriteExt;

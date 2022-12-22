@@ -9,7 +9,7 @@ use tokio_tungstenite::tungstenite::Message;
 use tokio_tungstenite::tungstenite::protocol::CloseFrame;
 use tokio_tungstenite::tungstenite::protocol::frame::coding::CloseCode;
 use serde_with::{serde_as, DisplayFromStr};
-use crate::connectors::ExchangeQuote;
+use crate::common::model::ExchangeQuote;
 
 pub struct BitstampOrderBookListener {
     exchange_symbol: String,

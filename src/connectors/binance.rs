@@ -11,7 +11,7 @@ use serde_json;
 use tokio::sync::mpsc::Sender;
 use flate2::read::GzDecoder;
 use futures::{StreamExt, SinkExt};
-use super::{OrderBookUpdate, ExchangeQuote};
+use crate::common::model::{OrderBookUpdate, ExchangeQuote};
 use std::io::Read;
 
 
