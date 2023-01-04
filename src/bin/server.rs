@@ -12,16 +12,20 @@ use tokio::sync::mpsc::{channel, Receiver};
 use tokio::sync::watch::Receiver as WatchReceiver;
 use tonic;
 use tonic::transport::Server;
+use tracing::{error, info};
+use tracing_subscriber;
 
 async fn order_book_aggregation<T: MergeQuotes>(
     mut receiver: Receiver<OrderBookUpdate>,
-    mut sender: tokio::sync::watch::Sender<Summary>,
+    sender: tokio::sync::watch::Sender<Summary>,
     mut order_book_aggregator: OrderBookAggregator<T>,
 ) {
     while let Some(message) = receiver.recv().await {
+        info!("received new order book update: {:?}", &message);
         if let Some(new_top) = order_book_aggregator.process(message) {
+            info!("book top updated: {:?}", &new_top);
             if let Err(err) = sender.send(new_top) {
-                println!("{:?}", err)
+                error!("failed to send new top. err={:?}", err)
             }
         }
     }
@@ -41,8 +45,8 @@ async fn grpc_server(rx: WatchReceiver<Summary>, addr: SocketAddr) {
 #[derive(Parser, Debug)]
 #[clap(about, version, author)]
 struct Args {
-    #[clap(short, long)]
-    symbol: String,
+    //#[clap(short, long)]
+    //symbol: String,
     #[clap(short, long, default_value_t = 10)]
     top_book_depth: usize,
     #[clap(short, long, default_value_t = 50051)]
@@ -51,8 +55,10 @@ struct Args {
 
 #[tokio::main]
 async fn main() {
+    tracing_subscriber::fmt::init();
+
     let args = Args::parse();
-    let symbol = args.symbol;
+    let symbol = "BTC/USDT".to_string();
 
     let (exchange_order_book_sender, exchange_order_book_receiver) = channel(3);
 

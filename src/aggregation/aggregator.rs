@@ -3,6 +3,7 @@ use crate::common::model::OrderBookUpdate;
 use crate::common::model::{AggregatedBookQuote, ExchangeQuote};
 use crate::orderbook::{Level, Summary};
 use std::collections::HashMap;
+use tracing::error;
 
 pub struct OrderBookAggregator<T: MergeQuotes> {
     exchanges_bids: Vec<Vec<ExchangeQuote>>,
@@ -49,15 +50,15 @@ impl<T: MergeQuotes> OrderBookAggregator<T> {
         let exchange_id = match order_book_update.exchange_id {
             Some(val) => val,
             None => {
-                println!("exchange_id is empty. skip update");
+                error!("exchange_id is empty. skip update");
                 return None;
             }
         };
 
         let mut top_changed = false;
 
-        self.exchanges_asks[exchange_id] = order_book_update.ask_changes; // TODO alex cut
-        self.exchanges_bids[exchange_id] = order_book_update.bid_changes; // TODO alex cut
+        self.exchanges_asks[exchange_id] = order_book_update.ask_changes;
+        self.exchanges_bids[exchange_id] = order_book_update.bid_changes;
 
         if let Some(val) =
             self.quotes_merger

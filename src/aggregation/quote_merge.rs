@@ -1,5 +1,6 @@
 use crate::common::model::{AggregatedBookQuote, ExchangeQuote};
 use std::cmp::Ordering;
+use tracing::info;
 
 pub trait MergeQuotes {
     fn merge_quotes(
@@ -125,6 +126,16 @@ impl MergeQuotes for IterativeMergeQuotes {
             Ordering::Less
         };
 
+        let mut exchanges_quotes_empty = true;
+        for quotes in exchanges_quotes {
+            if !quotes.is_empty() {
+                exchanges_quotes_empty = false;
+            }
+        }
+        if exchanges_quotes_empty {
+            return None;
+        }
+
         'merge_loop: loop {
             best_value = None;
             best_value_exchange = None;
@@ -168,7 +179,7 @@ impl MergeQuotes for IterativeMergeQuotes {
             }
 
             if best_value_exchange.is_none() || best_value_quote_index.is_none() {
-                println!("min_key or min_key_index is none");
+                info!("min_key or min_key_index is none");
                 continue 'merge_loop;
             }
 

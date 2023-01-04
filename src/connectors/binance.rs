@@ -4,12 +4,15 @@ use futures::{SinkExt, StreamExt};
 use serde::Deserialize;
 use serde_json;
 use std::io::Read;
+use std::thread;
+use std::time::Duration;
 use tokio::sync::mpsc::Sender;
 use tokio_tungstenite::{
     connect_async,
     tungstenite::protocol::{frame::coding::CloseCode, CloseFrame},
     tungstenite::Message,
 };
+use tracing::{error, info};
 
 pub struct BinanceOrderBookListener {
     exchange_symbol: String,
@@ -64,7 +67,29 @@ impl BinanceOrderBookListener {
         );
 
         'reconnection_loop: loop {
-            let (mut stream, _) = connect_async(subscription_url.clone()).await.unwrap();
+            {
+                // Send empty bid and asks to reset collector quotes
+                let order_book_update = OrderBookUpdate {
+                    exchange_id: Some(self.exchange_id),
+                    bid_changes: vec![],
+                    ask_changes: vec![],
+                };
+
+                if let Err(err) = pub_chan.send(order_book_update).await {
+                    error!("can't send update to chan. err={:?}", err);
+                    return;
+                }
+            }
+            thread::sleep(Duration::from_secs(1)); // prevents ws spamming
+            info!("subscribing to binance websocket data");
+            let (mut stream, _) = match connect_async(subscription_url.clone()).await {
+                Ok(val) => val,
+                Err(err) => {
+                    error!("failed to connect. err={:?}", err);
+                    thread::sleep(Duration::from_secs(5));
+                    continue 'reconnection_loop;
+                }
+            };
 
             loop {
                 let rcv = stream.next().await;
@@ -74,14 +99,16 @@ impl BinanceOrderBookListener {
                 let raw_msg = match rcv.unwrap() {
                     Ok(val) => val,
                     Err(err) => {
-                        // TODO Alex: handle errors
-                        println!("err: {:?}", err);
-                        stream
+                        error!("error in websocket recv {:?}", err);
+                        if let Err(err) = stream
                             .close(Some(CloseFrame {
                                 code: CloseCode::Normal,
                                 reason: "Client requested connection close.".into(),
                             }))
-                            .await;
+                            .await
+                        {
+                            error!("can't close websocket err={:?}", err);
+                        };
                         continue 'reconnection_loop;
                     }
                 };
@@ -99,21 +126,21 @@ impl BinanceOrderBookListener {
                         value
                     }
                     Message::Ping(_) => {
-                        if let Err(err) = stream.send(Message::Pong("pong".into())).await {};
+                        if let Err(err) = stream.send(Message::Pong("pong".into())).await {
+                            error!("failed to send pong. err={:?}", err)
+                        };
                         continue;
                     }
                     other => {
-                        println!("received unexpected: {:?}", other);
+                        error!("received unexpected message={:?}", other);
                         continue;
                     }
                 };
 
-                //println!("binance message: {:?}", &binance_message);
-
                 let mut order_book_update: OrderBookUpdate = binance_message.into();
                 order_book_update.exchange_id = Some(self.exchange_id);
                 if let Err(err) = pub_chan.send(order_book_update).await {
-                    println!("{}", err);
+                    error!("can't send update to chan. err={:?}", err);
                     return;
                 }
             }

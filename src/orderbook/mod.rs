@@ -5,6 +5,7 @@ use tokio::sync::mpsc::channel;
 use tokio_stream::wrappers::ReceiverStream;
 use tonic;
 use tonic::{Request, Response, Status};
+use tracing::{error, info};
 
 #[derive(Debug)]
 pub struct OrderbookAggregatorPublisher {
@@ -25,7 +26,8 @@ impl OrderbookAggregator for OrderbookAggregatorPublisher {
         &self,
         _request: Request<Empty>,
     ) -> Result<Response<Self::BookSummaryStream>, Status> {
-        let (mut tx, rx) = channel(4);
+        info!("new book summary subscriber");
+        let (tx, rx) = channel(4);
         let mut summary_receiver = self.receiver.clone();
 
         tokio::spawn(async move {
@@ -34,7 +36,10 @@ impl OrderbookAggregator for OrderbookAggregatorPublisher {
                 if summary.bids.is_empty() || summary.asks.is_empty() {
                     continue;
                 }
-                tx.send(Ok(summary)).await.unwrap(); // TODO alex handle
+                info!("publish new book summary: {:?}", &summary);
+                if let Err(err) = tx.send(Ok(summary)).await {
+                    error!("failed to send book summary. err={:?}", err);
+                };
             }
         });
 

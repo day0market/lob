@@ -256,7 +256,6 @@ mod tests {
 
         let top_book = top_book.unwrap();
         assert_eq!(top_book.len(), top_book_depth);
-        println!("{:#?}", &top_book);
 
         let mut best_quote = &top_book[0];
         for quote in &top_book[1..] {
@@ -315,7 +314,6 @@ mod tests {
 
         let top_book = top_book.unwrap();
         assert_eq!(top_book.len(), top_book_depth);
-        println!("{:#?}", &top_book);
 
         let mut best_quote = &top_book[0];
         for quote in &top_book[1..] {
