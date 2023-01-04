@@ -7,18 +7,18 @@ use std::collections::HashMap;
 pub struct OrderBookAggregator<T: MergeQuotes> {
     exchanges_bids: Vec<Vec<ExchangeQuote>>,
     exchanges_asks: Vec<Vec<ExchangeQuote>>,
-    old_bid_book_top: Vec<AggregatedBookQuote>,
-    old_ask_book_top: Vec<AggregatedBookQuote>,
+    bid_book_top: Vec<AggregatedBookQuote>,
+    ask_book_top: Vec<AggregatedBookQuote>,
 
     exchanges_number: usize,
     top_book_depth: usize,
-    book_merger: T,
+    quotes_merger: T,
     exchanges_id_mapping: HashMap<usize, String>,
 }
 
 impl<T: MergeQuotes> OrderBookAggregator<T> {
     pub fn new(
-        book_merger: T,
+        quotes_merger: T,
         exchanges_number: usize,
         top_book_depth: usize,
         exchanges_id_mapping: HashMap<usize, String>,
@@ -36,11 +36,11 @@ impl<T: MergeQuotes> OrderBookAggregator<T> {
         Self {
             exchanges_bids,
             exchanges_asks,
-            old_bid_book_top,
-            old_ask_book_top,
+            bid_book_top: old_bid_book_top,
+            ask_book_top: old_ask_book_top,
             exchanges_number,
             top_book_depth,
-            book_merger,
+            quotes_merger,
             exchanges_id_mapping,
         }
     }
@@ -60,19 +60,19 @@ impl<T: MergeQuotes> OrderBookAggregator<T> {
         self.exchanges_bids[exchange_id] = order_book_update.bid_changes; // TODO alex cut
 
         if let Some(val) =
-            self.book_merger
-                .merge_quotes(&self.exchanges_bids, &self.old_bid_book_top, true)
+            self.quotes_merger
+                .merge_quotes(&self.exchanges_bids, &self.bid_book_top, true)
         {
             top_changed = true;
-            self.old_bid_book_top = val;
+            self.bid_book_top = val;
         }
 
         if let Some(val) =
-            self.book_merger
-                .merge_quotes(&self.exchanges_asks, &self.old_ask_book_top, false)
+            self.quotes_merger
+                .merge_quotes(&self.exchanges_asks, &self.ask_book_top, false)
         {
             top_changed = true;
-            self.old_ask_book_top = val;
+            self.ask_book_top = val;
         };
 
         if top_changed {
@@ -83,14 +83,14 @@ impl<T: MergeQuotes> OrderBookAggregator<T> {
     }
 
     fn get_summary(&self) -> Option<Summary> {
-        if self.old_bid_book_top.is_empty() || self.old_ask_book_top.is_empty() {
+        if self.bid_book_top.is_empty() || self.ask_book_top.is_empty() {
             return None;
         }
 
         let mut bids = Vec::with_capacity(self.top_book_depth);
         let mut asks = Vec::with_capacity(self.top_book_depth);
 
-        for bid in &self.old_bid_book_top {
+        for bid in &self.bid_book_top {
             bids.push(Level {
                 exchange: self
                     .exchanges_id_mapping
@@ -102,7 +102,7 @@ impl<T: MergeQuotes> OrderBookAggregator<T> {
             })
         }
 
-        for ask in &self.old_ask_book_top {
+        for ask in &self.ask_book_top {
             asks.push(Level {
                 exchange: self
                     .exchanges_id_mapping
@@ -114,7 +114,7 @@ impl<T: MergeQuotes> OrderBookAggregator<T> {
             })
         }
 
-        let spread = self.old_ask_book_top[0].price - self.old_bid_book_top[0].price;
+        let spread = self.ask_book_top[0].price - self.bid_book_top[0].price;
 
         Some(Summary { spread, bids, asks })
     }

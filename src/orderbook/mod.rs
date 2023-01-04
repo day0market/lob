@@ -7,18 +7,18 @@ use tonic;
 use tonic::{Request, Response, Status};
 
 #[derive(Debug)]
-pub struct OrderBookServer {
+pub struct OrderbookAggregatorPublisher {
     receiver: tokio::sync::watch::Receiver<Summary>,
 }
 
-impl OrderBookServer {
+impl OrderbookAggregatorPublisher {
     pub fn new(receiver: tokio::sync::watch::Receiver<Summary>) -> Self {
         Self { receiver }
     }
 }
 
 #[tonic::async_trait]
-impl OrderbookAggregator for OrderBookServer {
+impl OrderbookAggregator for OrderbookAggregatorPublisher {
     type BookSummaryStream = ReceiverStream<Result<Summary, Status>>;
 
     async fn book_summary(
@@ -34,7 +34,7 @@ impl OrderbookAggregator for OrderBookServer {
                 if summary.bids.is_empty() || summary.asks.is_empty() {
                     continue;
                 }
-                tx.send(Ok(summary)).await.unwrap();
+                tx.send(Ok(summary)).await.unwrap(); // TODO alex handle
             }
         });
 

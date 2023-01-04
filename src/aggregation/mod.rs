@@ -281,7 +281,7 @@ mod tests {
         let n_exchanges = order_books.len();
         let old_top = vec![];
         let mut merger = VecSortMergeQuotes::new(top_book_depth, n_exchanges);
-        let top_book = merger.merge_quotes(&order_books, &old_top, true);
+        let top_book = merger.merge_quotes(&order_books, &old_top, false);
         assert!(top_book.is_some());
 
         let top_book = top_book.unwrap();

@@ -1,9 +1,10 @@
+use clap::Parser;
 use lob::aggregation::aggregator::OrderBookAggregator;
 use lob::aggregation::quote_merge::{IterativeMergeQuotes, MergeQuotes};
 use lob::common::model::OrderBookUpdate;
 use lob::connectors::binance::BinanceOrderBookListener;
 use lob::connectors::bitstamp::BitstampOrderBookListener;
-use lob::orderbook::OrderBookServer;
+use lob::orderbook::OrderbookAggregatorPublisher;
 use lob::orderbook::{orderbook_aggregator_server::OrderbookAggregatorServer, Summary};
 use std::collections::HashMap;
 use std::net::SocketAddr;
@@ -27,28 +28,42 @@ async fn order_book_aggregation<T: MergeQuotes>(
 }
 
 async fn grpc_server(rx: WatchReceiver<Summary>, addr: SocketAddr) {
-    let order_book_server = OrderBookServer::new(rx);
-    let order_book_aggregator_server = OrderbookAggregatorServer::new(order_book_server);
+    let publisher = OrderbookAggregatorPublisher::new(rx);
+    let server = OrderbookAggregatorServer::new(publisher);
 
     Server::builder()
-        .add_service(order_book_aggregator_server)
+        .add_service(server)
         .serve(addr)
         .await
-        .unwrap(); // TODO alex handle
+        .unwrap();
+}
+
+#[derive(Parser, Debug)]
+#[clap(about, version, author)]
+struct Args {
+    #[clap(short, long)]
+    symbol: String,
+    #[clap(short, long, default_value_t = 10)]
+    top_book_depth: usize,
+    #[clap(short, long, default_value_t = 50051)]
+    port: usize,
 }
 
 #[tokio::main]
 async fn main() {
-    let top_book_depth = 10;
+    let args = Args::parse();
+    let symbol = args.symbol;
+
     let (exchange_order_book_sender, exchange_order_book_receiver) = channel(3);
+
     let (summary_sender, summary_receiver) = tokio::sync::watch::channel(Summary {
         spread: 0.0,
         bids: vec![],
         asks: vec![],
     });
 
-    let binance = BinanceOrderBookListener::new("BTC/USDT", 0);
-    let bitstamp = BitstampOrderBookListener::new("BTC/USDT", 1);
+    let binance = BinanceOrderBookListener::new(&symbol, 0);
+    let bitstamp = BitstampOrderBookListener::new(&symbol, 1);
 
     let mut exchange_id_mapping = HashMap::new();
     exchange_id_mapping.insert(0, "binance".to_string());
@@ -56,24 +71,16 @@ async fn main() {
 
     let exchanges_number = exchange_id_mapping.len();
 
-    let book_merger = IterativeMergeQuotes::new(10, exchanges_number);
+    let quotes_merger = IterativeMergeQuotes::new(args.top_book_depth, exchanges_number);
 
     let order_book_aggregator = OrderBookAggregator::new(
-        book_merger,
+        quotes_merger,
         exchanges_number,
-        top_book_depth,
+        args.top_book_depth,
         exchange_id_mapping,
     );
 
-    let t1 = {
-        let sender = exchange_order_book_sender.clone();
-        tokio::spawn(async move { binance.run(sender).await })
-    };
-    let t2 = {
-        let sender = exchange_order_book_sender.clone();
-        tokio::spawn(async move { bitstamp.run(sender).await })
-    };
-    let t3 = tokio::spawn(async move {
+    let order_book_aggregation = tokio::spawn(async move {
         order_book_aggregation(
             exchange_order_book_receiver,
             summary_sender,
@@ -82,11 +89,20 @@ async fn main() {
         .await
     });
 
-    let addr = "0.0.0.0:50051".parse().unwrap();
-    let t4 = tokio::spawn(async move { grpc_server(summary_receiver, addr).await });
+    let binance_order_book_handler = {
+        let sender = exchange_order_book_sender.clone();
+        tokio::spawn(async move { binance.run(sender).await })
+    };
+    let bitstamp_order_book_handler = {
+        let sender = exchange_order_book_sender.clone();
+        tokio::spawn(async move { bitstamp.run(sender).await })
+    };
 
-    t1.await.unwrap();
-    t2.await.unwrap();
-    t3.await.unwrap();
-    t4.await.unwrap();
+    let addr = format!("0.0.0.0:{}", args.port).parse().unwrap();
+    let grpc_server = tokio::spawn(async move { grpc_server(summary_receiver, addr).await });
+
+    binance_order_book_handler.await.unwrap();
+    bitstamp_order_book_handler.await.unwrap();
+    order_book_aggregation.await.unwrap();
+    grpc_server.await.unwrap();
 }
