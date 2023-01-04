@@ -45,8 +45,8 @@ async fn grpc_server(rx: WatchReceiver<Summary>, addr: SocketAddr) {
 #[derive(Parser, Debug)]
 #[clap(about, version, author)]
 struct Args {
-    //#[clap(short, long)]
-    //symbol: String,
+    #[clap(short, long)]
+    symbol: String,
     #[clap(short, long, default_value_t = 10)]
     top_book_depth: usize,
     #[clap(short, long, default_value_t = 50051)]
@@ -58,7 +58,7 @@ async fn main() {
     tracing_subscriber::fmt::init();
 
     let args = Args::parse();
-    let symbol = "BTC/USDT".to_string();
+    let symbol = args.symbol;
 
     let (exchange_order_book_sender, exchange_order_book_receiver) = channel(3);
 
